@@ -11,13 +11,38 @@ import os
 import shutil
 import json
 import uuid
+import firebase_admin
+from firebase_admin import credentials, storage
+from dotenv import load_dotenv
+
+# Load env variables
+load_dotenv()
+
+# Initialize Firebase
+if not firebase_admin._apps:
+    bucket_name = os.getenv("STORAGE_BUCKET")
+    if not bucket_name:
+        raise ValueError("Missing STORAGE_BUCKET environment variable")
+
+    # Check for credentials JSON string (Better for production/deployment)
+    firebase_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    
+    if firebase_json:
+        # Parse the JSON string directly
+        cred_dict = json.loads(firebase_json)
+        cred = credentials.Certificate(cred_dict)
+    else:
+        # Fallback to file path (Better for local development)
+        cred_path = os.getenv("FIREBASE_CREDENTIALS")
+        if not cred_path:
+             raise ValueError("Missing authentication. Set FIREBASE_CREDENTIALS_JSON (raw content) or FIREBASE_CREDENTIALS (file path).")
+        cred = credentials.Certificate(cred_path)
+
+    firebase_admin.initialize_app(cred, {
+        'storageBucket': bucket_name
+    })
 
 app = FastAPI()
-
-# Mount static files for uploads
-UPLOADS_DIR = "backend/static/uploads"
-os.makedirs(UPLOADS_DIR, exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 # CORS
 app.add_middleware(
@@ -158,13 +183,24 @@ def create_log(log: DailyLogCreate, db: Session = Depends(database.get_db)):
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    filename = f"{uuid.uuid4()}_{file.filename}"
-    filepath = os.path.join(UPLOADS_DIR, filename)
-    
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Upload to Firebase Storage
+    try:
+        bucket = storage.bucket()
+        filename = f"uploads/{uuid.uuid4()}_{file.filename}"
+        blob = bucket.blob(filename)
         
-    return {"url": f"/api/uploads/{filename}"}
+        # Determine content type
+        content_type = file.content_type
+        if not content_type:
+             content_type = "application/octet-stream"
+             
+        blob.upload_from_file(file.file, content_type=content_type)
+        blob.make_public()
+        
+        return {"url": blob.public_url}
+    except Exception as e:
+        print(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/init")
 def init_data(data: dict, db: Session = Depends(database.get_db)):

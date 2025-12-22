@@ -51,6 +51,7 @@ wheels/
 htmlcov/
 *.db
 *.sqlite3
+/backend/backend/firebase/*.json
 
 # Virtual Environments
 venv/
