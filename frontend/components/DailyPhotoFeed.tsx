@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { getDailyLogs, getJobs, getUsers } from '../services/dataService';
 import { STAGES, DailyLog, Job, User } from '../types';
-import { Calendar, Image as ImageIcon, Sun, Moon, Briefcase, CheckCircle, UserX, Hammer, CheckCircle2 } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Sun, Moon, Briefcase, CheckCircle, UserX, Hammer, CheckCircle2, Filter, X, ZoomIn } from 'lucide-react';
 import { StageBadge } from './StageBadge';
 
 export const DailyPhotoFeed: React.FC = () => {
@@ -15,6 +15,13 @@ export const DailyPhotoFeed: React.FC = () => {
   const [allJobs, setAllJobs] = useState<Job[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [selectedStage, setSelectedStage] = useState<string>('All');
+  const [selectedWorker, setSelectedWorker] = useState<string>('All');
+
+  // Preview Modal
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string, subtitle: string } | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -52,6 +59,7 @@ export const DailyPhotoFeed: React.FC = () => {
     }
   };
 
+  // Process and Filter Data
   const activityData = useMemo(() => {
     const selectedDate = new Date(date + 'T00:00:00');
 
@@ -74,13 +82,18 @@ export const DailyPhotoFeed: React.FC = () => {
     });
 
     // 2. Build the display data structure
-    // Iterate through stages in order
     const result = STAGES.map(stage => {
       const stageWorkers = workersByStage[stage] || [];
 
-      // Map each worker to their logs for the day
+      // Filter by selected stage if needed
+      if (selectedStage !== 'All' && stage !== selectedStage) return null;
+
+      // Map each worker to their logs
       const allWorkers = stageWorkers.map(worker => {
-        // A. Daily Logs (Attendance/Updates)
+        // Filter by selected worker if needed
+        if (selectedWorker !== 'All' && worker.name !== selectedWorker) return null;
+
+        // A. Daily Logs
         const myDailyLogs = allDailyLogs
           .filter(l => l.workerName === worker.name && isSameDay(new Date(l.timestamp), selectedDate))
           .map(l => {
@@ -113,11 +126,13 @@ export const DailyPhotoFeed: React.FC = () => {
               photo: l.photoUrl,
               time: l.timestamp,
               color,
-              icon: Icon
+              icon: Icon,
+              workerName: l.workerName,
+              subType: l.type
             };
           });
 
-        // B. Job Logs (Legacy Job Transitions if any)
+        // B. Job Logs
         const myJobLogs = allJobs.flatMap(job =>
           job.history
             .filter(h => h.workerName === worker.name && isSameDay(new Date(h.timestamp), selectedDate))
@@ -128,11 +143,12 @@ export const DailyPhotoFeed: React.FC = () => {
               photo: h.proofPhotoUrl,
               time: h.timestamp,
               color: 'bg-blue-100 text-blue-800',
-              icon: CheckCircle
+              icon: CheckCircle,
+              workerName: h.workerName,
+              subType: 'Job'
             }))
         );
 
-        // Combine and Sort Chronologically
         const combinedLogs = [...myDailyLogs, ...myJobLogs].sort((a, b) =>
           new Date(a.time).getTime() - new Date(b.time).getTime()
         );
@@ -141,54 +157,111 @@ export const DailyPhotoFeed: React.FC = () => {
           worker,
           logs: combinedLogs
         };
-      });
+      }).filter((w): w is { worker: User; logs: any[] } => w !== null);
+
+      if (allWorkers.length === 0) return null;
 
       // Return the stage group, keeping ALL workers regardless of logs
       return {
         stage,
         workers: allWorkers
       };
-    }).filter(group => group.workers.length > 0); // Only keep stages that have assigned staff
+    }).filter((g): g is { stage: typeof STAGES[number]; workers: { worker: User; logs: any[] }[] } => g !== null);
 
     return result;
-  }, [date, allDailyLogs, allJobs, allUsers]);
+  }, [date, allDailyLogs, allJobs, allUsers, selectedStage, selectedWorker]);
+
+  // Unique Workers for Filter
+  const availableWorkers = useMemo(() => {
+    const workers = allUsers.filter(u => u.role === 'Worker');
+    if (selectedStage === 'All') return workers;
+    return workers.filter(u => u.assignedStage === selectedStage);
+  }, [allUsers, selectedStage]);
 
   if (loading) return <div className="text-center py-20 text-gray-400">Loading feed...</div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300 pb-20">
-      {/* Date Picker Header */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between sticky top-16 z-20">
+    <div className="space-y-6 animate-in fade-in duration-300 pb-20 relative">
+
+      {/* Controls Bar */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 justify-between sticky top-16 z-20">
+        {/* Date Picker */}
         <div
-          className="flex items-center gap-4 cursor-pointer group"
+          className="flex items-center gap-3 cursor-pointer group shrink-0"
           onClick={handleCalendarClick}
         >
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-100 transition-colors">
-            <Calendar size={24} />
+          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors">
+            <Calendar size={20} />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 cursor-pointer">Activity Date</label>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Date</label>
             <input
               ref={dateInputRef}
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="font-bold text-gray-900 bg-transparent outline-none text-lg cursor-pointer block w-full"
+              className="font-bold text-gray-900 bg-transparent outline-none text-base cursor-pointer block w-32"
             />
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-sm font-medium text-gray-500">Staffed Depts</div>
-          <div className="text-2xl font-bold text-indigo-900">
-            {activityData.length}
+
+        <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
+
+        {/* Filters */}
+        <div className="flex flex-1 gap-3 overflow-x-auto pb-1 md:pb-0">
+          {/* Stage Filter */}
+          <div className="relative min-w-[140px]">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <Hammer size={14} />
+            </div>
+            <select
+              value={selectedStage}
+              onChange={(e) => setSelectedStage(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+            >
+              <option value="All">All Stages</option>
+              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
+
+          {/* Worker Filter */}
+          <div className="relative min-w-[140px]">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <UserX size={14} />
+            </div>
+            <select
+              value={selectedWorker}
+              onChange={(e) => setSelectedWorker(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+            >
+              <option value="All">All Workers</option>
+              {availableWorkers.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
+            </select>
+          </div>
+
+          {/* Reset - Only show if filtered */}
+          {(selectedStage !== 'All' || selectedWorker !== 'All') && (
+            <button
+              onClick={() => { setSelectedStage('All'); setSelectedWorker('All'); }}
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Clear Filters"
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Stats */}
+      <div className="px-1 text-xs font-semibold text-gray-500 uppercase tracking-widest">
+        Showing {activityData.length} Group{activityData.length !== 1 && 's'}
+      </div>
+
+      {/* Grouped Layout (Restored) */}
       {activityData.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
           <ImageIcon size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">No staff configured in the system.</p>
+          <p className="text-gray-500">No activity matching your filters.</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -225,46 +298,48 @@ export const DailyPhotoFeed: React.FC = () => {
                         {/* Timeline / Photo Strip */}
                         {logs.length > 0 ? (
                           <div className="flex-1 overflow-x-auto pb-4 hide-scrollbar">
-                            <div className="flex gap-6">
-                              {logs.map((log) => {
-                                const Icon = log.icon;
-                                return (
-                                  <div key={log.id} className="flex-none group relative w-56">
-                                    {/* Thumbnail - Increased size */}
-                                    <div className="aspect-square rounded-2xl overflow-hidden bg-gray-200 border border-gray-200 shadow-md mb-3 relative">
-                                      <img
-                                        src={log.photo}
-                                        alt={log.title}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        loading="lazy"
-                                      />
-                                      <a
-                                        href={log.photo}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"
-                                      />
-                                      {/* Mini Badge inside photo */}
-                                      <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold ${log.color} shadow-sm flex items-center gap-1`}>
-                                        <Icon size={12} />
-                                        {log.type === 'Job' ? 'JOB' : log.type.toUpperCase()}
+                            <div className="flex gap-4">
+                              {logs.map((item) => (
+                                <div
+                                  key={item.id + item.type}
+                                  className="flex-none group relative bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all cursor-zoom-in w-40"
+                                  onClick={() => setPreviewImage({ url: item.photo, title: item.title, subtitle: `${item.workerName} • ${format(new Date(item.time), 'h:mm a')}` })}
+                                >
+                                  {/* Image */}
+                                  <div className="aspect-[4/5] bg-gray-100 relative">
+                                    <img
+                                      src={item.photo}
+                                      alt={item.title}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+
+                                    {/* Zoom Icon on Hover */}
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full text-white">
+                                        <ZoomIn size={16} />
                                       </div>
                                     </div>
 
-                                    {/* Caption */}
-                                    <div className="px-1">
-                                      <div className="flex justify-between items-center mb-1">
-                                        <div className="text-xs font-bold text-gray-900 truncate flex-1 pr-2">
-                                          {log.title}
-                                        </div>
-                                        <div className="text-xs text-gray-500 font-mono">
-                                          {format(new Date(log.time), 'h:mm a')}
-                                        </div>
-                                      </div>
+                                    {/* Top Badge */}
+                                    <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold ${item.color} shadow-sm uppercase tracking-wide`}>
+                                      {item.subType || 'JOB'}
                                     </div>
                                   </div>
-                                );
-                              })}
+
+                                  {/* Minimal Caption */}
+                                  <div className="p-2">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-[10px] text-gray-400 font-mono">{format(new Date(item.time), 'HH:mm')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 mt-1 text-xs font-medium text-gray-900 truncate">
+                                      <item.icon size={12} className="text-gray-400" />
+                                      <span className="truncate">{item.title}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         ) : (
@@ -283,6 +358,58 @@ export const DailyPhotoFeed: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row" onClick={e => e.stopPropagation()}>
+
+            {/* Image Side */}
+            <div className="flex-1 bg-black flex items-center justify-center relative min-h-[50vh]">
+              <img
+                src={previewImage.url}
+                alt="Preview"
+                className="max-h-[85vh] max-w-full object-contain"
+              />
+            </div>
+
+            {/* Sidebar Info (Desktop) or Bottom (Mobile) */}
+            <div className="w-full md:w-80 bg-white p-6 flex flex-col shrink-0 border-l border-gray-100">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">{previewImage.title}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{previewImage.subtitle}</p>
+                </div>
+                <button
+                  onClick={() => setPreviewImage(null)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="flex-1">
+                {/* Placeholder for comments or details in future */}
+                <div className="bg-gray-50 rounded-xl p-4 text-center text-sm text-gray-400 italic">
+                  No additional notes.
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-100">
+                <a
+                  href={previewImage.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block w-full text-center py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
+                >
+                  Download Original
+                </a>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
     </div>

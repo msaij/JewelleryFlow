@@ -22,7 +22,12 @@ export const UserManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       const data = await getUsers();
-      setUsers(data);
+      // Sort by Role (Alphabetical: Admin -> Worker) then Name
+      const sorted = data.sort((a, b) => {
+        if (a.role !== b.role) return a.role.localeCompare(b.role);
+        return a.name.localeCompare(b.name);
+      });
+      setUsers(sorted);
     } catch (e) {
       console.error("Failed to load users", e);
     }
@@ -33,7 +38,7 @@ export const UserManagement: React.FC = () => {
     if (!name || !username || !password) return;
 
     const userData: User = {
-      id: editingId || Date.now().toString(),
+      id: editingId || '', // Empty ID tells backend to generate one
       name,
       username,
       password,
@@ -59,7 +64,7 @@ export const UserManagement: React.FC = () => {
   const handleEditClick = (user: User) => {
     setName(user.name);
     setUsername(user.username);
-    setPassword(user.password);
+    setPassword(''); // Don't populate existing password for security/technical reasons
     setRole(user.role);
     setAssignedStage(user.assignedStage || STAGES[0]);
     setEditingId(user.id);

@@ -51,7 +51,8 @@ wheels/
 htmlcov/
 *.db
 *.sqlite3
-/backend/backend/firebase/*.json
+# Private files
+*/01a_private/**
 
 # Virtual Environments
 venv/

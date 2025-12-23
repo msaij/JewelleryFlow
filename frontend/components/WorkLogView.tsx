@@ -20,7 +20,7 @@ interface WorkSession {
 }
 
 export const WorkLogView: React.FC = () => {
-  const [filterDate, setFilterDate] = useState<string>(''); // Empty means all time
+  const [filterDate, setFilterDate] = useState<string>(format(new Date(), 'yyyy-MM-dd')); // Default to today
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,8 +199,8 @@ export const WorkLogView: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${session.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-100' :
-                        session.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                          'bg-gray-50 text-gray-500 border-gray-100'
+                      session.status === 'In Progress' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                        'bg-gray-50 text-gray-500 border-gray-100'
                       }`}>
                       {session.status === 'Completed' && <CheckCircle2 size={12} />}
                       {session.status === 'In Progress' && <Hammer size={12} />}
