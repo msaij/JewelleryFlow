@@ -143,7 +143,10 @@ class DailyLog(DailyLogBase):
 # Helper Functions
 # -------------------------------------------------------------------
 def get_timestamp():
-    return datetime.datetime.now().isoformat()
+    # Standardize to IST (UTC+05:30) explicitly
+    ist_offset = datetime.timedelta(hours=5, minutes=30)
+    ist_tz = datetime.timezone(ist_offset)
+    return datetime.datetime.now(ist_tz).isoformat()
 
 # -------------------------------------------------------------------
 # API Endpoints

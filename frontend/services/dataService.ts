@@ -95,6 +95,18 @@ export const getDailyLogs = async (): Promise<DailyLog[]> => {
 
 // --- MUTATIONS ---
 
+// Helper to get ISO string in IST (approximated for client)
+const getISTISOString = () => {
+  const date = new Date();
+  // We want to store a string that LOOKS like local time if we want straightforward "Today" checks
+  // OR we store proper ISO with offset. 
+  // Backend now uses +05:30. Let's send +05:30 from frontend too if possible.
+  // Actually, easiest way to standardization is to manually offset UTC to IST
+  const offset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(date.getTime() + offset);
+  return istDate.toISOString().replace('Z', '+05:30');
+};
+
 export const createJob = async (image: string, priority: Priority): Promise<Job> => {
   const jobs = await getJobs();
   const newId = `J-${1000 + jobs.length + 1}`;
@@ -103,7 +115,7 @@ export const createJob = async (image: string, priority: Priority): Promise<Job>
     designImageUrl: image,
     currentStage: STAGES[0],
     priority,
-    createdAt: new Date().toISOString(),
+    createdAt: getISTISOString(),
     history: []
   };
 
@@ -130,7 +142,7 @@ export const advanceJob = async (jobId: string, proofPhoto: string, worker: User
     stageName: job.currentStage,
     workerName: worker.name,
     proofPhotoUrl: proofPhoto,
-    timestamp: new Date().toISOString()
+    timestamp: getISTISOString()
   };
 
   // Optimistic update structure to send to backend
@@ -153,7 +165,7 @@ export const addDailyLog = async (worker: User, type: 'Start' | 'End' | 'StartWo
     workerName: worker.name,
     type,
     photoUrl: photo,
-    timestamp: new Date().toISOString()
+    timestamp: getISTISOString()
   };
 
   await fetch(`${API_BASE}/daily-logs`, {
