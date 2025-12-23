@@ -3,8 +3,8 @@ import { Job, User, JobLog, DailyLog, STAGES, Priority } from '../types';
 import { APP_KEYS } from '../constants';
 
 // --- API CONFIG ---
-// For Vercel deployment, backend is at /api relative to frontend
-const API_BASE = '/api';
+// For Hybrid deployment (Netlify FE + Vercel BE), we need absolute URL
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // --- INITIALIZATION & SEEDING ---
 
