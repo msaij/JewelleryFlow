@@ -3,17 +3,14 @@ import { Job, User, JobLog, DailyLog, STAGES, Priority } from '../types';
 import { APP_KEYS } from '../constants';
 
 // --- API CONFIG ---
+// For Vercel deployment, backend is at /api relative to frontend
 const API_BASE = '/api';
 
 // --- INITIALIZATION & SEEDING ---
 
 // --- INITIALIZATION & SEEDING ---
+// --- INITIALIZATION & SEEDING ---
 // Deprecated: Backend handles seeding via migration scripts.
-// Keeping empty init function for interface compatibility if needed, else removing.
-
-export const initializeData = async () => {
-  // No-op
-};
 
 // --- USER AUTH ---
 

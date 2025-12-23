@@ -388,8 +388,4 @@ async def upload_file(file: UploadFile = File(...)):
         print(f"Upload Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/init")
-def init_data(data: dict):
-    # This endpoint is kept for compatibility but effectively disabled
-    # as we use migration script now.
-    return {"message": "Use migration script instead"}
+
