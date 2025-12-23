@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 import uuid
-import shutil
+
 import os
 import datetime
 from dotenv import load_dotenv
@@ -254,9 +254,9 @@ def get_jobs():
     for doc in docs:
         job_data = doc.to_dict()
         # Fetch history subcollection or array? 
-        # Plan used array in document for simplicity in migration
-        # Let's check how we want to store it. For simplicity, we will store history inside the job document as a list of dicts.
-        # But wait, our Pydantic model expects List[JobLog].
+        # Fetch history subcollection or array? 
+        # Using array in document for simplicity.
+
         
         # Ensure ID is present
         if 'id' not in job_data:
@@ -290,17 +290,8 @@ def update_job(job_id: str, job_data: dict):
     
     current_data = job_doc.to_dict()
     
-    # Logic to merge history if it's being sent fully, or just append helpers.
-    # The frontend usually sends partial updates or full object on PUT.
-    # Let's assume frontend logic:
-    
-    # Map simple fields
-    if "currentStage" in job_data:
-        current_data['currentStage'] = job_data['currentStage']
-        
-    # History Handling: 
-    # If the frontend sends a new history item in the list, we need to save it.
-    # Or frontend sends full history list.
+    # History Handling
+
     if "history" in job_data:
          current_data['history'] = job_data['history']
 
@@ -322,7 +313,7 @@ def add_job_log(job_id: str, log: JobLogCreate):
     new_log = log.dict()
     new_log['id'] = str(uuid.uuid4())
     new_log['jobId'] = job_id
-    # Ensure timestamp if not provided or override? FE sends it usually.
+    # Ensure timestamp if not provided
     if not new_log.get('timestamp'):
         new_log['timestamp'] = get_timestamp()
 

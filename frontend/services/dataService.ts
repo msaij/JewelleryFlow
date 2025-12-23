@@ -6,15 +6,9 @@ import { APP_KEYS } from '../constants';
 // For Hybrid deployment (Netlify FE + Vercel BE), we need absolute URL
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-// --- INITIALIZATION & SEEDING ---
 
-// --- INITIALIZATION & SEEDING ---
-// --- INITIALIZATION & SEEDING ---
-// Deprecated: Backend handles seeding via migration scripts.
 
-// --- USER AUTH ---
 
-// --- USER AUTH ---
 
 export const authenticateUser = async (username: string, pass: string): Promise<User | null> => {
   try {
@@ -97,11 +91,9 @@ export const getDailyLogs = async (): Promise<DailyLog[]> => {
 
 // Helper to get ISO string in IST (approximated for client)
 const getISTISOString = () => {
+  // We want to offset local time to IST (+05:30) so backend receives consistent data.
   const date = new Date();
-  // We want to store a string that LOOKS like local time if we want straightforward "Today" checks
-  // OR we store proper ISO with offset. 
-  // Backend now uses +05:30. Let's send +05:30 from frontend too if possible.
-  // Actually, easiest way to standardization is to manually offset UTC to IST
+
   const offset = 5.5 * 60 * 60 * 1000;
   const istDate = new Date(date.getTime() + offset);
   return istDate.toISOString().replace('Z', '+05:30');
@@ -184,8 +176,8 @@ export const addUser = async (user: User) => {
 };
 
 export const updateUser = async (updatedUser: User) => {
-  // Validate admin logic could be here or backend. 
-  // Keeping it simple.
+  // Update user
+
   await fetch(`${API_BASE}/users/${updatedUser.id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
