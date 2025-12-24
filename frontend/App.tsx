@@ -24,22 +24,57 @@ export default function App() {
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(false);
   const [dailyLogType, setDailyLogType] = useState<'Start' | 'End' | 'StartWork' | 'CompleteWork' | null>(null);
 
+  const [isOnShift, setIsOnShift] = useState(false);
+
   // Initialize
   useEffect(() => {
     const session = db.getSession();
     if (session) {
       setUser(session);
-      loadData();
+      loadData(session);
     }
   }, []);
 
-  const loadData = () => {
-    setJobs(db.getJobs());
+  const loadData = async (currentUser?: User) => {
+    setJobs(await db.getJobs()); // await properly
+
+    // Check shift status
+    const actualUser = currentUser || user;
+    if (actualUser && actualUser.role === 'Worker') {
+      const logs = await db.getDailyLogs();
+      // Filter for today and this user
+      // Note: Backend timestamps are IST ISO strings.
+      // Simple string match on yyyy-mm-dd might be tricky depending on how ISO string looks (+05:30)
+      // But actually, we just need to find the LATEST log for this user.
+      // If it is 'Start', they are on shift. If 'End', they are off.
+
+      const userLogs = logs
+        .filter(l => l.workerName === actualUser.name)
+        // Sort by timestamp desc (newest first)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      if (userLogs.length > 0) {
+        const lastLog = userLogs[0];
+        // Check if the last log was from TODAY (to avoid detecting yesterday's start if they forgot to End)
+        const logDate = new Date(lastLog.timestamp).toDateString();
+        const today = new Date().toDateString(); // Local client today.
+
+        // If last log was today AND it was 'Start' -> On Shift
+        if (logDate === today && lastLog.type === 'Start') {
+          setIsOnShift(true);
+        } else {
+          setIsOnShift(false);
+        }
+      } else {
+        setIsOnShift(false);
+      }
+    }
   };
 
   const handleLogout = () => {
     db.clearSession();
     setUser(null);
+    setIsOnShift(false);
   };
 
   const handleAdvanceJob = async (file: File) => {
@@ -52,7 +87,7 @@ export default function App() {
   const handleCreateJob = async (file: File) => {
     // Default to Normal priority for simplicity
     const url = await db.uploadFile(file);
-    db.createJob(url, 'Normal');
+    await db.createJob(url, 'Normal'); // await
     loadData();
   };
 
@@ -61,9 +96,10 @@ export default function App() {
     setIsUploading(true);
     try {
       const url = await db.uploadFile(file);
-      db.addDailyLog(user, type, url);
+      await db.addDailyLog(user, type, url);
       setIsDailyLogOpen(false);
       setDailyLogType(null);
+      loadData(); // Reload to update shift status
     } catch (e) {
       alert("Error uploading daily log");
     } finally {
@@ -78,7 +114,7 @@ export default function App() {
 
   // If not logged in
   if (!user) {
-    return <LoginPage onLogin={(u) => { setUser(u); loadData(); }} />;
+    return <LoginPage onLogin={(u) => { setUser(u); loadData(u); }} />;
   }
 
   // --- WORKER VIEW ---
@@ -97,61 +133,78 @@ export default function App() {
 
         <main className="flex-1 p-4 flex flex-col justify-center max-w-lg mx-auto w-full gap-4">
 
-          {/* Start Day Button */}
-          <button
-            onClick={() => openDailyLog('Start')}
-            className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-6 hover:shadow-md transition-all active:scale-98"
-          >
-            <div className="bg-orange-100 text-orange-600 p-4 rounded-full group-hover:bg-orange-200 transition-colors">
-              <Sun size={32} />
-            </div>
-            <div className="text-left">
-              <h2 className="text-xl font-bold text-gray-900">Start Day</h2>
-              <p className="text-sm text-gray-500">Check-in attendance</p>
-            </div>
-          </button>
+          {/* STATE A: NOT STARTED */}
+          {!isOnShift && (
+            <button
+              onClick={() => openDailyLog('Start')}
+              className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col items-center gap-6 hover:shadow-md transition-all active:scale-98 animate-in fade-in zoom-in duration-300"
+            >
+              <div className="bg-orange-100 text-orange-600 p-6 rounded-full group-hover:bg-orange-200 transition-colors">
+                <Sun size={48} />
+              </div>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-gray-900">Start Day</h2>
+                <p className="text-gray-500 mt-1">Check-in to begin work</p>
+              </div>
+            </button>
+          )}
 
-          {/* Start New Work */}
-          <button
-            onClick={() => openDailyLog('StartWork')}
-            className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-6 hover:shadow-md transition-all active:scale-98"
-          >
-            <div className="bg-indigo-100 text-indigo-600 p-4 rounded-full group-hover:bg-indigo-200 transition-colors">
-              <Hammer size={32} />
-            </div>
-            <div className="text-left">
-              <h2 className="text-xl font-bold text-gray-900">Start New Work</h2>
-              <p className="text-sm text-gray-500">Log new task start</p>
-            </div>
-          </button>
+          {/* STATE B: ON SHIFT */}
+          {isOnShift && (
+            <>
+              {/* Start New Work */}
+              <button
+                onClick={() => openDailyLog('StartWork')}
+                className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-6 hover:shadow-md transition-all active:scale-98"
+              >
+                <div className="bg-indigo-100 text-indigo-600 p-4 rounded-full group-hover:bg-indigo-200 transition-colors">
+                  <Hammer size={32} />
+                </div>
+                <div className="text-left">
+                  <h2 className="text-xl font-bold text-gray-900">Start New Work</h2>
+                  <p className="text-sm text-gray-500">Log new task start</p>
+                </div>
+              </button>
 
-          {/* Completed Photo */}
-          <button
-            onClick={() => openDailyLog('CompleteWork')}
-            className="bg-green-600 group relative overflow-hidden rounded-2xl shadow-lg shadow-green-200 p-8 flex flex-col items-center justify-center gap-3 text-center hover:bg-green-700 transition-all active:scale-98"
-          >
-            <div className="bg-white/20 text-white p-5 rounded-full backdrop-blur-sm mb-1">
-              <CheckCircle2 size={40} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Completed Photo</h2>
-              <p className="text-green-100">Upload finished work</p>
-            </div>
-          </button>
+              {/* Completed Photo */}
+              <button
+                onClick={() => openDailyLog('CompleteWork')}
+                className="bg-green-600 group relative overflow-hidden rounded-2xl shadow-lg shadow-green-200 p-8 flex flex-col items-center justify-center gap-3 text-center hover:bg-green-700 transition-all active:scale-98"
+              >
+                <div className="bg-white/20 text-white p-5 rounded-full backdrop-blur-sm mb-1">
+                  <CheckCircle2 size={40} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Completed Photo</h2>
+                  <p className="text-green-100">Upload finished work</p>
+                </div>
+              </button>
 
-          {/* End Day Button */}
-          <button
-            onClick={() => openDailyLog('End')}
-            className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-6 hover:shadow-md transition-all active:scale-98"
-          >
-            <div className="bg-gray-100 text-gray-600 p-4 rounded-full group-hover:bg-gray-200 transition-colors">
-              <Moon size={32} />
-            </div>
-            <div className="text-left">
-              <h2 className="text-xl font-bold text-gray-900">End Day</h2>
-              <p className="text-sm text-gray-500">Check-out attendance</p>
-            </div>
-          </button>
+              {/* Divider */}
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-gray-100 px-3 text-gray-500 font-medium">Shift Complete?</span>
+                </div>
+              </div>
+
+              {/* End Day Button */}
+              <button
+                onClick={() => openDailyLog('End')}
+                className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-6 hover:shadow-md transition-all active:scale-98"
+              >
+                <div className="bg-gray-100 text-gray-600 p-4 rounded-full group-hover:bg-gray-200 transition-colors">
+                  <Moon size={32} />
+                </div>
+                <div className="text-left">
+                  <h2 className="text-xl font-bold text-gray-900">End Day</h2>
+                  <p className="text-sm text-gray-500">Check-out attendance</p>
+                </div>
+              </button>
+            </>
+          )}
 
         </main>
 
