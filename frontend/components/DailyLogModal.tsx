@@ -79,7 +79,7 @@ export const DailyLogModal: React.FC<DailyLogModalProps> = ({ isOpen, onClose, o
             <X size={20} />
           </button>
         </div>
-        
+
         <div className="p-6">
           {/* If for some reason type isn't set, we show fallback buttons, but UI flow usually sets it */}
           {!logType ? (
@@ -87,7 +87,7 @@ export const DailyLogModal: React.FC<DailyLogModalProps> = ({ isOpen, onClose, o
           ) : (
             <>
               {!previewUrl ? (
-                <div 
+                <div
                   onClick={() => fileInputRef.current?.click()}
                   className="border-2 border-dashed border-gray-300 rounded-xl h-64 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-indigo-500 transition-colors group"
                 >
@@ -99,7 +99,7 @@ export const DailyLogModal: React.FC<DailyLogModalProps> = ({ isOpen, onClose, o
               ) : (
                 <div className="relative rounded-xl overflow-hidden border border-gray-200">
                   <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
-                  <button 
+                  <button
                     onClick={() => {
                       setSelectedFile(null);
                       setPreviewUrl(null);
@@ -113,11 +113,11 @@ export const DailyLogModal: React.FC<DailyLogModalProps> = ({ isOpen, onClose, o
             </>
           )}
 
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
             onChange={handleFileSelect}
-            className="hidden" 
+            className="hidden"
             accept="image/*"
             capture="environment"
           />
@@ -125,13 +125,13 @@ export const DailyLogModal: React.FC<DailyLogModalProps> = ({ isOpen, onClose, o
 
         {logType && (
           <div className="p-4 border-t bg-gray-50 flex gap-3">
-            <button 
+            <button
               onClick={onClose}
               className="flex-1 py-3 px-4 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 shadow-sm hover:bg-gray-50"
             >
               Cancel
             </button>
-            <button 
+            <button
               disabled={!selectedFile || isUploading}
               onClick={handleSubmit}
               className={`flex-1 py-3 px-4 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 ${getColorClass()}`}
