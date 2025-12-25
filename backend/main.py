@@ -23,7 +23,7 @@ app = FastAPI()
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://jewelleryflow.vercel.app/"
+    "https://jewelleryflow.vercel.app" # NO slash at the end
 ]
 
 app.add_middleware(
