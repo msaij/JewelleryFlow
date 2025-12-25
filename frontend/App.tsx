@@ -24,7 +24,8 @@ export default function App() {
   const [isDailyLogOpen, setIsDailyLogOpen] = useState(false);
   const [dailyLogType, setDailyLogType] = useState<'Start' | 'End' | 'StartWork' | 'CompleteWork' | null>(null);
 
-  const [isOnShift, setIsOnShift] = useState(false);
+  const [shiftStatus, setShiftStatus] = useState<'NOT_STARTED' | 'ACTIVE' | 'COMPLETED'>('NOT_STARTED');
+  const [loading, setLoading] = useState(true);
 
   // Initialize
   useEffect(() => {
@@ -32,50 +33,53 @@ export default function App() {
     if (session) {
       setUser(session);
       loadData(session);
+    } else {
+      setLoading(false); // If no session, stop loading (will show login)
     }
   }, []);
 
   const loadData = async (currentUser?: User) => {
-    setJobs(await db.getJobs()); // await properly
+    try {
+      setJobs(await db.getJobs());
 
-    // Check shift status
-    const actualUser = currentUser || user;
-    if (actualUser && actualUser.role === 'Worker') {
-      const logs = await db.getDailyLogs();
-      // Filter for today and this user
-      // Note: Backend timestamps are IST ISO strings.
-      // Simple string match on yyyy-mm-dd might be tricky depending on how ISO string looks (+05:30)
-      // But actually, we just need to find the LATEST log for this user.
-      // If it is 'Start', they are on shift. If 'End', they are off.
+      // Check shift status
+      const actualUser = currentUser || user;
+      if (actualUser && actualUser.role === 'Worker') {
+        const logs = await db.getDailyLogs();
+        const userLogs = logs
+          .filter(l => l.workerName === actualUser.name)
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-      const userLogs = logs
-        .filter(l => l.workerName === actualUser.name)
-        // Sort by timestamp desc (newest first)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        let status: 'NOT_STARTED' | 'ACTIVE' | 'COMPLETED' = 'NOT_STARTED';
 
-      if (userLogs.length > 0) {
-        const lastLog = userLogs[0];
-        // Check if the last log was from TODAY (to avoid detecting yesterday's start if they forgot to End)
-        const logDate = new Date(lastLog.timestamp).toDateString();
-        const today = new Date().toDateString(); // Local client today.
+        if (userLogs.length > 0) {
+          const lastLog = userLogs[0];
+          const logDate = new Date(lastLog.timestamp).toDateString();
+          const today = new Date().toDateString();
 
-        // If last log was today AND it was 'Start' -> On Shift
-        if (logDate === today && lastLog.type === 'Start') {
-          setIsOnShift(true);
-        } else {
-          setIsOnShift(false);
+          if (logDate === today) {
+            if (lastLog.type === 'Start') {
+              status = 'ACTIVE';
+            } else if (lastLog.type === 'End') {
+              status = 'COMPLETED';
+            } else {
+              status = 'ACTIVE';
+            }
+          }
         }
-      } else {
-        setIsOnShift(false);
+        setShiftStatus(status);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = () => {
     db.clearSession();
     setUser(null);
-    setIsOnShift(false);
+    setShiftStatus('NOT_STARTED');
   };
+
 
   const handleAdvanceJob = async (file: File) => {
     if (!jobToAdvance || !user) return;
@@ -112,9 +116,19 @@ export default function App() {
     setIsDailyLogOpen(true);
   };
 
+
   // If not logged in
-  if (!user) {
-    return <LoginPage onLogin={(u) => { setUser(u); loadData(u); }} />;
+  if (!user && !loading) {
+    return <LoginPage onLogin={(u) => { setUser(u); setLoading(true); loadData(u); }} />;
+  }
+
+  // Loading Screen
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
   }
 
   // --- WORKER VIEW ---
@@ -134,7 +148,7 @@ export default function App() {
         <main className="flex-1 p-4 flex flex-col justify-center max-w-lg mx-auto w-full gap-4">
 
           {/* STATE A: NOT STARTED */}
-          {!isOnShift && (
+          {shiftStatus === 'NOT_STARTED' && (
             <button
               onClick={() => openDailyLog('Start')}
               className="bg-white group relative overflow-hidden rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col items-center gap-6 hover:shadow-md transition-all active:scale-98 animate-in fade-in zoom-in duration-300"
@@ -150,7 +164,7 @@ export default function App() {
           )}
 
           {/* STATE B: ON SHIFT */}
-          {isOnShift && (
+          {shiftStatus === 'ACTIVE' && (
             <>
               {/* Start New Work */}
               <button
@@ -204,6 +218,17 @@ export default function App() {
                 </div>
               </button>
             </>
+          )}
+
+          {/* STATE C: COMPLETED */}
+          {shiftStatus === 'COMPLETED' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center animate-in fade-in zoom-in duration-300">
+              <div className="bg-green-100 text-green-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 size={40} />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Shift Completed!</h2>
+              <p className="text-gray-500">Good job today. See you tomorrow.</p>
+            </div>
           )}
 
         </main>

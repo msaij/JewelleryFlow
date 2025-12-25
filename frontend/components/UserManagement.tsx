@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, STAGES, Role } from '../types';
 import { getUsers, addUser, removeUser, updateUser } from '../services/dataService';
-import { Trash2, UserPlus, Shield, User as UserIcon, Edit, Save, X } from 'lucide-react';
+import { Trash2, UserPlus, Shield, User as UserIcon, Edit, Save, X, Filter } from 'lucide-react';
+import { SearchableSelect } from './SearchableSelect';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -14,6 +15,9 @@ export const UserManagement: React.FC = () => {
   const [role, setRole] = useState<Role>('Worker');
   const [assignedStage, setAssignedStage] = useState<string>(STAGES[0]);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [selectedStage, setSelectedStage] = useState<string>('All');
+  const [selectedWorker, setSelectedWorker] = useState<string>('All');
 
   useEffect(() => {
     loadUsers();
@@ -32,6 +36,35 @@ export const UserManagement: React.FC = () => {
       console.error("Failed to load users", e);
     }
   };
+
+  // Filter users based on selected filters (Stage and Worker name)
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      // Stage Filter Application
+      if (selectedStage !== 'All') {
+        // If a stage is selected, valid only if user is a Worker in that stage
+        // Admins are hidden when a specific stage is selected as they don't belong to stages
+        if (user.role === 'Worker' && user.assignedStage !== selectedStage) return false;
+        if (user.role !== 'Worker') return false;
+      }
+
+      // Worker Name Filter Application
+      if (selectedWorker !== 'All' && user.name !== selectedWorker) return false;
+
+      return true;
+    });
+  }, [users, selectedStage, selectedWorker]);
+
+  // Derived list of potential workers for the dropdown, strictly filtered by selected stage
+  const availableWorkers = useMemo(() => {
+    let list = users;
+    // If strict stage filter is on, only show workers belonging to that stage in the dropdown
+    if (selectedStage !== 'All') {
+      list = list.filter(u => u.role === 'Worker' && u.assignedStage === selectedStage);
+    }
+    return list;
+  }, [users, selectedStage]);
+
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,19 +127,60 @@ export const UserManagement: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold text-gray-900">Staff Management</h2>
-        <button
-          onClick={() => {
-            if (isAdding) resetForm();
-            else setIsAdding(true);
-          }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${isAdding ? 'bg-gray-100 text-gray-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-        >
-          {isAdding ? <X size={16} /> : <UserPlus size={16} />}
-          {isAdding ? 'Cancel' : 'Add New User'}
-        </button>
+    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Staff Management</h2>
+          <p className="text-sm text-gray-500">Manage access and department assignments</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 z-10">
+
+          {/* Stage Filter */}
+          <div className="relative">
+            <select
+              value={selectedStage}
+              onChange={(e) => setSelectedStage(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white min-w-[140px]"
+            >
+              <option value="All">All Departments</option>
+              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          {/* Worker Filter */}
+          <SearchableSelect
+            options={availableWorkers.map(u => ({ id: u.id, label: u.name, value: u.name }))}
+            value={selectedWorker}
+            onChange={setSelectedWorker}
+            label="Staff"
+            className="min-w-[160px]"
+          />
+
+          {/* Reset Filter */}
+          {(selectedStage !== 'All' || selectedWorker !== 'All') && (
+            <button
+              onClick={() => { setSelectedStage('All'); setSelectedWorker('All'); }}
+              className="p-2 text-gray-500 hover:text-gray-700 bg-gray-100 rounded-lg shrink-0"
+              title="Clear Filters"
+            >
+              <Filter size={16} />
+            </button>
+          )}
+
+          <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
+
+          <button
+            onClick={() => {
+              if (isAdding) resetForm();
+              else setIsAdding(true);
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${isAdding ? 'bg-gray-100 text-gray-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+          >
+            {isAdding ? <X size={16} /> : <UserPlus size={16} />}
+            {isAdding ? 'Cancel' : 'Add New'}
+          </button>
+        </div>
       </div>
 
       {isAdding && (
@@ -188,7 +262,7 @@ export const UserManagement: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative -z-0">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -199,47 +273,55 @@ export const UserManagement: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {users.map(user => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                      {user.role === 'Admin' ? <Shield size={14} /> : <UserIcon size={14} />}
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map(user => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                        {user.role === 'Admin' ? <Shield size={14} /> : <UserIcon size={14} />}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                      </div>
                     </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.username}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
-                    {user.role} {user.assignedStage && `(${user.assignedStage})`}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  {/* Edit Button */}
-                  <button
-                    onClick={() => handleEditClick(user)}
-                    className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-2 rounded-full mr-2 transition-colors"
-                    title="Edit User"
-                  >
-                    <Edit size={16} />
-                  </button>
-
-                  {/* Delete Button - Only show if not self (Admin) to prevent full lockout, though real apps check ID */}
-                  {user.username !== 'Admin' && (
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.username}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
+                      {user.role} {user.assignedStage && `(${user.assignedStage})`}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {/* Edit Button */}
                     <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 hover:text-red-900 bg-red-50 p-2 rounded-full transition-colors"
-                      title="Delete User"
+                      onClick={() => handleEditClick(user)}
+                      className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-2 rounded-full mr-2 transition-colors"
+                      title="Edit User"
                     >
-                      <Trash2 size={16} />
+                      <Edit size={16} />
                     </button>
-                  )}
+
+                    {/* Delete Button - Only show if not self (Admin) to prevent full lockout, though real apps check ID */}
+                    {user.username !== 'Admin' && (
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="text-red-600 hover:text-red-900 bg-red-50 p-2 rounded-full transition-colors"
+                        title="Delete User"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                  No users found matching filters.
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

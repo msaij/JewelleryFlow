@@ -2,9 +2,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { format, differenceInMinutes, isSameDay } from 'date-fns';
 import { getDailyLogs, getUsers } from '../services/dataService';
-import { DailyLog, User } from '../types';
+import { DailyLog, User, STAGES } from '../types';
 import { Hammer, CheckCircle2, Clock, ArrowRight, Calendar, Filter } from 'lucide-react';
 import { StageBadge } from './StageBadge';
+import { SearchableSelect } from './SearchableSelect';
 
 interface WorkSession {
   id: string;
@@ -25,6 +26,17 @@ export const WorkLogView: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters
+  const [selectedStage, setSelectedStage] = useState<string>('All');
+  const [selectedWorker, setSelectedWorker] = useState<string>('All');
+
+  // Unique Workers for Filter
+  const availableWorkers = useMemo(() => {
+    const workerList = users.filter(u => u.role === 'Worker');
+    if (selectedStage === 'All') return workerList;
+    return workerList.filter(u => u.assignedStage === selectedStage);
+  }, [users, selectedStage]);
+
   useEffect(() => {
     const fetchData = async () => {
       const [l, u] = await Promise.all([getDailyLogs(), getUsers()]);
@@ -39,7 +51,7 @@ export const WorkLogView: React.FC = () => {
     // Helper to get worker details
     const getWorker = (name: string) => users.find(u => u.name === name);
 
-    // Group by worker to pair events
+    // Group by worker to pair 'StartWork' and 'CompleteWork' events
     const workerGroups: Record<string, typeof dailyLogs> = {};
     dailyLogs.forEach(log => {
       if (log.type === 'StartWork' || log.type === 'CompleteWork') {
@@ -50,8 +62,9 @@ export const WorkLogView: React.FC = () => {
 
     const results: WorkSession[] = [];
 
+    // Process each worker's logs to find valid sessions (Start -> Complete)
     Object.keys(workerGroups).forEach(workerName => {
-      // Sort chronological
+      // Sort logs chronologically to ensure correct pairing
       const wLogs = workerGroups[workerName].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const worker = getWorker(workerName);
       const stage = worker?.assignedStage || 'Unknown';
@@ -60,7 +73,7 @@ export const WorkLogView: React.FC = () => {
 
       wLogs.forEach(log => {
         if (log.type === 'StartWork') {
-          // If we were already tracking a job, the previous one was abandoned/incomplete
+          // If we encounter a new Start while already tracking one, the previous one was abandoned or incomplete
           if (currentStart) {
             results.push({
               id: currentStart.id,
@@ -71,14 +84,14 @@ export const WorkLogView: React.FC = () => {
               startPhoto: currentStart.photoUrl,
               endTime: null,
               endPhoto: null,
-              duration: 'Abandoned',
+              duration: 'Abandoned', // Mark as abandoned
               status: 'Abandoned'
             });
           }
           currentStart = log;
         } else if (log.type === 'CompleteWork') {
           if (currentStart) {
-            // Found a valid pair
+            // Found a valid pair: Start -> Complete
             const start = new Date(currentStart.timestamp);
             const end = new Date(log.timestamp);
             const diff = differenceInMinutes(end, start);
@@ -97,9 +110,9 @@ export const WorkLogView: React.FC = () => {
               duration: `${h}h ${m}m`,
               status: 'Completed'
             });
-            currentStart = null;
+            currentStart = null; // Reset for next session
           } else {
-            // Found a complete without a start (orphan)
+            // Found a 'Complete' without a preceding 'Start' (orphan event)
             results.push({
               id: log.id,
               workerName,
@@ -116,7 +129,7 @@ export const WorkLogView: React.FC = () => {
         }
       });
 
-      // If still pending at the end
+      // If a Start event is still pending at the end of the list, it's "In Progress"
       if (currentStart) {
         results.push({
           id: currentStart.id,
@@ -133,16 +146,24 @@ export const WorkLogView: React.FC = () => {
       }
     });
 
-    // Sort by most recent start time
+    // Sort final results by most recent start time
     let finalResults = results.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-    // Apply Filter
+    // Apply Date Filter
     if (filterDate) {
       finalResults = finalResults.filter(s => isSameDay(new Date(s.startTime), new Date(filterDate)));
     }
 
+    // Apply Stage/Worker Filters
+    if (selectedStage !== 'All') {
+      finalResults = finalResults.filter(s => s.workerStage === selectedStage);
+    }
+    if (selectedWorker !== 'All') {
+      finalResults = finalResults.filter(s => s.workerName === selectedWorker);
+    }
+
     return finalResults;
-  }, [filterDate, dailyLogs, users]);
+  }, [filterDate, dailyLogs, users, selectedStage, selectedWorker]);
 
   if (loading) return <div className="p-10 text-center text-gray-500">Loading work logs...</div>;
 
@@ -153,21 +174,44 @@ export const WorkLogView: React.FC = () => {
           <h2 className="text-lg font-bold text-gray-900">Task Duration Logs</h2>
           <p className="text-sm text-gray-500">Track time between 'Start Work' and 'Completed'</p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none">
+
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto z-10">
+
+          {/* Stage Filter */}
+          <select
+            value={selectedStage}
+            onChange={(e) => setSelectedStage(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white min-w-[120px]"
+          >
+            <option value="All">All Stages</option>
+            {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          {/* Worker Filter (Searchable) */}
+          <SearchableSelect
+            options={availableWorkers.map(w => ({ id: w.id, label: w.name, value: w.name }))}
+            value={selectedWorker}
+            onChange={setSelectedWorker}
+            label="Workers"
+            className="min-w-[160px]"
+          />
+
+          {/* Date Filter */}
+          <div className="relative flex-none">
             <Calendar className="absolute left-3 top-2.5 text-gray-400" size={16} />
             <input
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-full"
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
-          {filterDate && (
+
+          {(filterDate || selectedStage !== 'All' || selectedWorker !== 'All') && (
             <button
-              onClick={() => setFilterDate('')}
-              className="p-2 text-gray-500 hover:text-gray-700 bg-gray-100 rounded-lg"
-              title="Clear Filter"
+              onClick={() => { setFilterDate(''); setSelectedStage('All'); setSelectedWorker('All'); }}
+              className="p-2 text-gray-500 hover:text-gray-700 bg-gray-100 rounded-lg shrink-0"
+              title="Clear Filters"
             >
               <Filter size={16} />
             </button>
@@ -175,7 +219,7 @@ export const WorkLogView: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden -z-0 relative">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-100">

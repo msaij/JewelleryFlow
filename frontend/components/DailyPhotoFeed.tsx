@@ -5,6 +5,7 @@ import { getDailyLogs, getJobs, getUsers } from '../services/dataService';
 import { STAGES, DailyLog, Job, User } from '../types';
 import { Calendar, Image as ImageIcon, Sun, Moon, Briefcase, CheckCircle, UserX, Hammer, CheckCircle2, Filter, X, ZoomIn } from 'lucide-react';
 import { StageBadge } from './StageBadge';
+import { SearchableSelect } from './SearchableSelect';
 
 export const DailyPhotoFeed: React.FC = () => {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -59,19 +60,19 @@ export const DailyPhotoFeed: React.FC = () => {
     }
   };
 
-  // Process and Filter Data
+  // Process and Filter Data into a grouped structure: Stage -> Workers -> Logs
   const activityData = useMemo(() => {
     const selectedDate = new Date(date + 'T00:00:00');
 
-    // 1. Group all workers by their assigned stage
+    // 1. Group all available workers by their assigned stage
     const workersByStage: Record<string, typeof allUsers> = {};
 
-    // Initialize standard stages
+    // Initialize all standard stages with empty lists
     STAGES.forEach(stage => {
       workersByStage[stage] = [];
     });
 
-    // Sort users into stages
+    // Distribute workers into their respective stage buckets
     allUsers.forEach(user => {
       if (user.role === 'Worker' && user.assignedStage) {
         if (!workersByStage[user.assignedStage]) {
@@ -81,19 +82,19 @@ export const DailyPhotoFeed: React.FC = () => {
       }
     });
 
-    // 2. Build the display data structure
+    // 2. Build the final display data structure by mapping over stages
     const result = STAGES.map(stage => {
       const stageWorkers = workersByStage[stage] || [];
 
-      // Filter by selected stage if needed
+      // Apply Stage Filter: Skip this stage if it doesn't match the selected filter
       if (selectedStage !== 'All' && stage !== selectedStage) return null;
 
-      // Map each worker to their logs
+      // Map each worker in this stage to their daily activity logs
       const allWorkers = stageWorkers.map(worker => {
-        // Filter by selected worker if needed
+        // Apply Worker Filter: Skip this worker if they don't match the selected filter
         if (selectedWorker !== 'All' && worker.name !== selectedWorker) return null;
 
-        // A. Daily Logs
+        // A. Filter and Map Daily Logs (Start/End Shift, Start/Complete Job)
         const myDailyLogs = allDailyLogs
           .filter(l => l.workerName === worker.name && isSameDay(new Date(l.timestamp), selectedDate))
           .map(l => {
@@ -101,6 +102,7 @@ export const DailyPhotoFeed: React.FC = () => {
             let color = 'bg-gray-100 text-gray-800';
             let Icon = Briefcase;
 
+            // Determine visual properties based on log type
             if (l.type === 'Start') {
               title = 'Start Shift';
               color = 'bg-orange-100 text-orange-800';
@@ -132,7 +134,7 @@ export const DailyPhotoFeed: React.FC = () => {
             };
           });
 
-        // B. Job Logs
+        // B. Filter and Map Job History Logs (Passing Jobs)
         const myJobLogs = allJobs.flatMap(job =>
           job.history
             .filter(h => h.workerName === worker.name && isSameDay(new Date(h.timestamp), selectedDate))
@@ -149,6 +151,7 @@ export const DailyPhotoFeed: React.FC = () => {
             }))
         );
 
+        // Combine and Sort all logs chronologically
         const combinedLogs = [...myDailyLogs, ...myJobLogs].sort((a, b) =>
           new Date(a.time).getTime() - new Date(b.time).getTime()
         );
@@ -159,9 +162,10 @@ export const DailyPhotoFeed: React.FC = () => {
         };
       }).filter((w): w is { worker: User; logs: any[] } => w !== null);
 
+      // If no workers remain in this stage (e.g., due to filtering), skip the stage
       if (allWorkers.length === 0) return null;
 
-      // Return the stage group, keeping ALL workers regardless of logs
+      // Return the stage group with its workers
       return {
         stage,
         workers: allWorkers
@@ -208,7 +212,7 @@ export const DailyPhotoFeed: React.FC = () => {
         <div className="h-8 w-px bg-gray-200 hidden md:block"></div>
 
         {/* Filters */}
-        <div className="flex flex-1 gap-3 overflow-x-auto pb-1 md:pb-0">
+        <div className="flex flex-1 flex-wrap gap-3 pb-1 md:pb-0 z-10">
           {/* Stage Filter */}
           <div className="relative min-w-[140px]">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -224,20 +228,14 @@ export const DailyPhotoFeed: React.FC = () => {
             </select>
           </div>
 
-          {/* Worker Filter */}
-          <div className="relative min-w-[140px]">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-              <UserX size={14} />
-            </div>
-            <select
-              value={selectedWorker}
-              onChange={(e) => setSelectedWorker(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-            >
-              <option value="All">All Workers</option>
-              {availableWorkers.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
-            </select>
-          </div>
+          {/* Worker Filter (Searchable) */}
+          <SearchableSelect
+            options={availableWorkers.map(w => ({ id: w.id, label: w.name, value: w.name }))}
+            value={selectedWorker}
+            onChange={setSelectedWorker}
+            label="Workers"
+            className="min-w-[160px]"
+          />
 
           {/* Reset - Only show if filtered */}
           {(selectedStage !== 'All' || selectedWorker !== 'All') && (
@@ -264,7 +262,7 @@ export const DailyPhotoFeed: React.FC = () => {
           <p className="text-gray-500">No activity matching your filters.</p>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8 -z-0 relative">
           {activityData.map(({ stage, workers }) => {
             const totalUploads = workers.reduce((acc, w) => acc + w.logs.length, 0);
 
