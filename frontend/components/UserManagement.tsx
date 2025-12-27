@@ -1,27 +1,34 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, STAGES, Role } from '../types';
-import { getUsers, addUser, removeUser, updateUser } from '../services/dataService';
-import { Trash2, UserPlus, Shield, User as UserIcon, Edit, Save, X, Filter } from 'lucide-react';
+import { User, Role, Department } from '../types';
+import { getUsers, addUser, removeUser, updateUser, getDepartments } from '../services/dataService';
+import { Trash2, UserPlus, Shield, User as UserIcon, Edit, Save, X, Filter, FolderPlus, Settings } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
+import { DepartmentManagementModal } from './DepartmentManagementModal';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('Worker');
-  const [assignedStage, setAssignedStage] = useState<string>(STAGES[0]);
+  const [assignedStage, setAssignedStage] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [selectedStage, setSelectedStage] = useState<string>('All');
   const [selectedWorker, setSelectedWorker] = useState<string>('All');
 
   useEffect(() => {
-    loadUsers();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    await Promise.all([loadUsers(), loadDepartments()]);
+  };
 
   const loadUsers = async () => {
     try {
@@ -34,6 +41,20 @@ export const UserManagement: React.FC = () => {
       setUsers(sorted);
     } catch (e) {
       console.error("Failed to load users", e);
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const data = await getDepartments();
+      const sorted = data.sort((a, b) => a.name.localeCompare(b.name));
+      setDepartments(sorted);
+      // Set default assigned stage if empty and departments exist
+      if (!assignedStage && sorted.length > 0) {
+        setAssignedStage(sorted[0].name);
+      }
+    } catch (e) {
+      console.error("Failed to load departments", e);
     }
   };
 
@@ -99,7 +120,7 @@ export const UserManagement: React.FC = () => {
     setUsername(user.username);
     setPassword(''); // Don't populate existing password for security/technical reasons
     setRole(user.role);
-    setAssignedStage(user.assignedStage || STAGES[0]);
+    setAssignedStage(user.assignedStage || (departments[0]?.name || ''));
     setEditingId(user.id);
     setIsAdding(true);
     // Scroll to top to see the form
@@ -121,7 +142,7 @@ export const UserManagement: React.FC = () => {
     setUsername('');
     setPassword('');
     setRole('Worker');
-    setAssignedStage(STAGES[0]);
+    setAssignedStage(departments[0]?.name || '');
     setEditingId(null);
     setIsAdding(false);
   };
@@ -136,7 +157,19 @@ export const UserManagement: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 z-10">
 
-          {/* Stage Filter */}
+          {/* Manage Departments Button */}
+          <button
+            onClick={() => setIsDeptModalOpen(true)}
+            className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg shrink-0 flex items-center gap-1 transition-colors"
+            title="Manage Departments"
+          >
+            <Settings size={18} />
+            <span className="hidden sm:inline text-xs font-bold">Departments</span>
+          </button>
+
+          <div className="h-6 w-px bg-gray-300 mx-1"></div>
+
+          {/* Department Filter */}
           <div className="relative">
             <select
               value={selectedStage}
@@ -144,7 +177,7 @@ export const UserManagement: React.FC = () => {
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white min-w-[140px]"
             >
               <option value="All">All Departments</option>
-              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
             </select>
           </div>
 
@@ -244,8 +277,9 @@ export const UserManagement: React.FC = () => {
                   onChange={(e) => setAssignedStage(e.target.value)}
                   className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  {STAGES.map(stage => (
-                    <option key={stage} value={stage}>{stage}</option>
+                  <option value="" disabled>Select Department</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.name}>{dept.name}</option>
                   ))}
                 </select>
               </div>
@@ -325,6 +359,13 @@ export const UserManagement: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      <DepartmentManagementModal
+        isOpen={isDeptModalOpen}
+        onClose={() => setIsDeptModalOpen(false)}
+        onDepartmentsChange={loadDepartments}
+      />
+
     </div>
   );
 };

@@ -1,11 +1,10 @@
 
-import { Job, User, JobLog, DailyLog, STAGES, Priority } from '../types';
+import { Job, User, JobLog, DailyLog, STAGES, Priority, Department } from '../types';
 import { APP_KEYS } from '../constants';
 
 // --- API CONFIG ---
 // For Hybrid deployment (Netlify FE + Vercel BE), we need absolute URL
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
-
 
 
 
@@ -78,6 +77,12 @@ export const getJobs = async (): Promise<Job[]> => {
 export const getUsers = async (): Promise<User[]> => {
   const res = await fetch(`${API_BASE}/users`);
   if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+};
+
+export const getDepartments = async (): Promise<Department[]> => {
+  const res = await fetch(`${API_BASE}/departments`);
+  if (!res.ok) throw new Error("Failed to fetch departments");
   return res.json();
 };
 
@@ -209,4 +214,21 @@ export const uploadFile = async (file: File): Promise<string> => {
   if (!res.ok) throw new Error("Upload failed");
   const data = await res.json();
   return data.url;
+};
+
+// --- DEPARTMENTS ---
+export const createDepartment = async (name: string): Promise<Department> => {
+  const res = await fetch(`${API_BASE}/departments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  if (!res.ok) throw new Error("Failed to create department");
+  return res.json();
+};
+
+export const deleteDepartment = async (id: string) => {
+  await fetch(`${API_BASE}/departments/${id}`, {
+    method: 'DELETE'
+  });
 };

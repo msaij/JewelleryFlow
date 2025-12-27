@@ -37,6 +37,11 @@ export interface DailyLog {
   timestamp: string;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+}
+
 // The Strict Order of Production
 export const STAGES = [
   "Hand Designing",

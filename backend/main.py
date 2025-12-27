@@ -124,7 +124,19 @@ class Job(JobBase):
     class Config:
         from_attributes = True
 
+class DepartmentBase(BaseModel):
+    name: str
+
+class DepartmentCreate(DepartmentBase):
+    pass
+
+class Department(DepartmentBase):
+    id: str  # e.g., "dept_" or UUID
+    class Config:
+        from_attributes = True
+
 class DailyLogBase(BaseModel):
+
     workerName: str
     type: str # 'Start', 'End', 'StartWork', 'CompleteWork'
     photoUrl: Optional[str] = None
@@ -148,9 +160,8 @@ def get_timestamp():
     ist_tz = datetime.timezone(ist_offset)
     return datetime.datetime.now(ist_tz).isoformat()
 
-# -------------------------------------------------------------------
-# API Endpoints
-# -------------------------------------------------------------------
+
+
 
 @app.get("/")
 def read_root():
@@ -382,4 +393,59 @@ async def upload_file(file: UploadFile = File(...)):
         print(f"Upload Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# -------------------------------------------------------------------
+# Departments
+# Managed via Dynamic Collection.
+# Includes strict "In-Use" validation to prevent data inconsistency.
+# -------------------------------------------------------------------
 
+@app.get("/api/departments", response_model=List[Department])
+def get_departments():
+    docs = db.collection('departments').order_by('name').stream()
+    depts = []
+    for doc in docs:
+        depts.append(Department(**doc.to_dict()))
+    return depts
+
+@app.post("/api/departments", response_model=Department)
+def create_department(dept: DepartmentCreate):
+    # Duplicate Check (Strict: Case-Insensitive + Ignore Spaces)
+    # "Revenue Department" == "revenuedepartment"
+    # Normalization helper
+    def normalize(s: str):
+        return s.lower().replace(" ", "")
+
+    docs = db.collection('departments').stream()
+    target_normalized = normalize(dept.name)
+
+    for doc in docs:
+        existing_name = doc.to_dict().get('name', '')
+        if normalize(existing_name) == target_normalized:
+             raise HTTPException(status_code=400, detail=f"Department '{existing_name}' already exists (similar match).")
+
+    new_ref = db.collection('departments').document() # Auto ID
+    dept_data = dept.dict()
+    dept_data['id'] = new_ref.id
+    
+    new_ref.set(dept_data)
+    return Department(**dept_data)
+
+@app.delete("/api/departments/{dept_id}")
+def delete_department(dept_id: str):
+    dept_ref = db.collection('departments').document(dept_id)
+    doc = dept_ref.get()
+    
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Department not found")
+        
+    dept_name = doc.to_dict().get('name')
+    
+    # Usage Check: Prevent deletion if any user is currently assigned to this Department
+    # This maintains data integrity so no user is left with a "ghost" department.
+    users_ref = db.collection('users')
+    query = users_ref.where('assignedStage', '==', dept_name).limit(1)
+    if len(query.get()) > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete '{dept_name}': It is currently assigned to active staff.")
+        
+    dept_ref.delete()
+    return {"status": "success", "message": f"Department {dept_id} deleted"}
