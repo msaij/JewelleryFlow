@@ -1,6 +1,7 @@
 
 import { Job, User, JobLog, DailyLog, STAGES, Priority, Department } from '../types';
 import { APP_KEYS } from '../constants';
+import { compressImage } from '../utils/imageUtils';
 
 // --- API CONFIG ---
 // For Hybrid deployment (Netlify FE + Vercel BE), we need absolute URL
@@ -203,8 +204,16 @@ export const hardReset = () => {
 
 // --- UPLOAD ---
 export const uploadFile = async (file: File): Promise<string> => {
+  // Compress image before upload
+  let fileToUpload = file;
+  try {
+    fileToUpload = await compressImage(file);
+  } catch (e) {
+    console.warn("Compression failed, uploading original.", e);
+  }
+
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', fileToUpload);
 
   const res = await fetch(`${API_BASE}/upload`, {
     method: 'POST',

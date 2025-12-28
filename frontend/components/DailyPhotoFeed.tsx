@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format, isSameDay } from 'date-fns';
-import { getDailyLogs, getJobs, getUsers } from '../services/dataService';
-import { STAGES, DailyLog, Job, User } from '../types';
+import { getDailyLogs, getJobs, getUsers, getDepartments } from '../services/dataService';
+import { DailyLog, Job, User, Department } from '../types';
 import { Calendar, Image as ImageIcon, Sun, Moon, Briefcase, CheckCircle, UserX, Hammer, CheckCircle2, Filter, X, ZoomIn } from 'lucide-react';
 import { StageBadge } from './StageBadge';
 import { SearchableSelect } from './SearchableSelect';
@@ -15,6 +15,7 @@ export const DailyPhotoFeed: React.FC = () => {
   const [allDailyLogs, setAllDailyLogs] = useState<DailyLog[]>([]);
   const [allJobs, setAllJobs] = useState<Job[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -27,14 +28,16 @@ export const DailyPhotoFeed: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [logs, jobs, users] = await Promise.all([
+        const [logs, jobs, users, depts] = await Promise.all([
           getDailyLogs(),
           getJobs(),
-          getUsers()
+          getUsers(),
+          getDepartments()
         ]);
         setAllDailyLogs(logs);
         setAllJobs(jobs);
         setAllUsers(users);
+        setAllDepartments(depts);
       } catch (error) {
         console.error("Failed to fetch feed data", error);
       } finally {
@@ -64,17 +67,22 @@ export const DailyPhotoFeed: React.FC = () => {
   const activityData = useMemo(() => {
     const selectedDate = new Date(date + 'T00:00:00');
 
+    // Sort departments by name (Dynamic List)
+    // REFACTOR: This replaces the hardcoded `STAGES` constant.
+    const sortedDeptNames = allDepartments.map(d => d.name).sort();
+
     // 1. Group all available workers by their assigned stage
     const workersByStage: Record<string, typeof allUsers> = {};
 
-    // Initialize all standard stages with empty lists
-    STAGES.forEach(stage => {
+    // Initialize buckets for known Dynamic Departments
+    sortedDeptNames.forEach(stage => {
       workersByStage[stage] = [];
     });
 
     // Distribute workers into their respective stage buckets
     allUsers.forEach(user => {
       if (user.role === 'Worker' && user.assignedStage) {
+        // Robustness: Handle users assigned to deleted/unknown departments
         if (!workersByStage[user.assignedStage]) {
           workersByStage[user.assignedStage] = [];
         }
@@ -83,7 +91,10 @@ export const DailyPhotoFeed: React.FC = () => {
     });
 
     // 2. Build the final display data structure by mapping over stages
-    const result = STAGES.map(stage => {
+    // We iterate over all keys in workersByStage to include both empty Departments and "orphaned" ones
+    const activeStages = Object.keys(workersByStage).sort();
+
+    const result = activeStages.map(stage => {
       const stageWorkers = workersByStage[stage] || [];
 
       // Apply Stage Filter: Skip this stage if it doesn't match the selected filter
@@ -170,10 +181,10 @@ export const DailyPhotoFeed: React.FC = () => {
         stage,
         workers: allWorkers
       };
-    }).filter((g): g is { stage: typeof STAGES[number]; workers: { worker: User; logs: any[] }[] } => g !== null);
+    }).filter((g): g is { stage: string; workers: { worker: User; logs: any[] }[] } => g !== null);
 
     return result;
-  }, [date, allDailyLogs, allJobs, allUsers, selectedStage, selectedWorker]);
+  }, [date, allDailyLogs, allJobs, allUsers, allDepartments, selectedStage, selectedWorker]);
 
   // Unique Workers for Filter
   const availableWorkers = useMemo(() => {
@@ -224,7 +235,7 @@ export const DailyPhotoFeed: React.FC = () => {
               className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
             >
               <option value="All">All Stages</option>
-              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              {allDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
             </select>
           </div>
 
