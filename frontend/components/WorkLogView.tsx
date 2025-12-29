@@ -1,8 +1,8 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { format, differenceInMinutes, isSameDay } from 'date-fns';
-import { getDailyLogs, getUsers } from '../services/dataService';
-import { DailyLog, User, STAGES } from '../types';
+import { getDailyLogs, getUsers, getDepartments } from '../services/dataService';
+import { DailyLog, User, Department } from '../types';
 import { Hammer, CheckCircle2, Clock, ArrowRight, Calendar, Filter, X, ZoomIn } from 'lucide-react';
 import { StageBadge } from './StageBadge';
 import { SearchableSelect } from './SearchableSelect';
@@ -24,6 +24,7 @@ export const WorkLogView: React.FC = () => {
   const [filterDate, setFilterDate] = useState<string>(format(new Date(), 'yyyy-MM-dd')); // Default to today
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -42,9 +43,10 @@ export const WorkLogView: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [l, u] = await Promise.all([getDailyLogs(), getUsers()]);
+      const [l, u, d] = await Promise.all([getDailyLogs(), getUsers(), getDepartments()]);
       setDailyLogs(l);
       setUsers(u);
+      setDepartments(d);
       setLoading(false);
     };
     fetchData();
@@ -241,13 +243,14 @@ export const WorkLogView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto z-10">
 
           {/* Stage Filter */}
+          {/* REFACTOR: Now uses dynamic 'departments' instead of const STAGES */}
           <select
             value={selectedStage}
             onChange={(e) => setSelectedStage(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white min-w-[120px]"
           >
             <option value="All">All Stages</option>
-            {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
           </select>
 
           {/* Worker Filter (Searchable) */}

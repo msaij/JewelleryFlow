@@ -1,82 +1,68 @@
-# Jewellery Flow Tracker
+# Jewellery Flow Tracker 💎
 
-This project is a full-stack application for tracking jewellery manufacturing workflows. It uses a **FastAPI** backend and a **React (Vite)** frontend, powered by **Firebase Firestore** for the database and **Firebase Storage** for media assets.
+A powerful full-stack application for managing jewellery manufacturing workflows, tracking staff attendance, and visualizing production lines.
 
-## Project Structure
+## 🚀 Tech Stack
 
-- `backend/`: FastAPI application (Python).
-- `frontend/`: React application (TypeScript/Vite).
+*   **Backend**: Python (FastAPI) + Google Cloud Run
+*   **Frontend**: React (Vite) + Tailwind CSS + Vercel
+*   **Database**: Firebase Firestore (NoSQL)
+*   **Storage**: Firebase Storage (Automatic WebP Compression)
+*   **Security**: Environment Variable credential management
 
-## Prerequisites
+## ✨ Key Features
 
-- Python 3.8+
-- Node.js 16+
-- Firebase Project Credentials (JSON file)
+### 🏭 Manufacturing Workflow
+*   **Job Tracking**: End-to-end tracking from "Hand Designing" to "Completed".
+*   **Proof of Work**: Workers must upload photos to advance jobs or clock in/out.
+*   **Strict Sequencing**: Ensures jobs follow the correct production stages.
 
-## Configuration (Environment Variables)
+### 👥 Dynamic Staff Management
+*   **Flexible Departments**: Create and manage customizable departments (e.g., "Polish 1", "CAD Team") via the Admin UI.
+*   **Smart Assignment**: Assign workers to specific departments to filter their views.
+*   **Duplicate Protection**: Smart backend checks prevent duplicate department names.
 
-The backend requires a `.env` file in the `backend/` directory with the following variables:
+### 📸 High-Performance Media
+*   **Auto-Compression**: All uploaded photos (Design, Proof, Selfie) are automatically compressed to **WebP** on the client-side.
+*   **Bandwidth Saving**: Reduces file sizes by ~30% with zero loss in visual quality.
 
+### 📊 Visualization
+*   **Daily Production Feed**: A real-time, chronological feed of all shop floor activity, grouped by Department.
+*   **Zoomable Previews**: High-res inspection of all uploaded work.
+
+## 🛠️ Setup & Running
+
+### 1. Configuration (.env)
+Create a `.env` in `backend/`:
 ```ini
-# Path to your Firebase Service Account Key JSON
-FIREBASE_CREDENTIALS=/absolute/path/to/serviceAccountKey.json
-
-# OR put the JSON content directly (useful for some deployment environments)
-# FIREBASE_CREDENTIALS_JSON={...}
-
-# Name of your Firebase Storage Bucket
-STORAGE_BUCKET=your-app.appspot.com
-
-# Name of your Firestore Database (optional, defaults to jewellery-flow-db)
-FIRESTORE_DB_NAME=jewellery-flow-db
+FIREBASE_CREDENTIALS=/path/to/key.json
+STORAGE_BUCKET=your-bucket.appspot.com
+FIRESTORE_DB_NAME=(optional)
 ```
 
-## Setup & Running
+### 2. Backend
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8080
+```
 
-### 1. Backend (FastAPI)
+### 3. Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Create and configure your `.env` file (see above).
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the server:
-   ```bash
-   uvicorn main:app --reload --port 8080
-   ```
+## ☁️ Deployment
 
-> **Note:** The server runs on **port 8080**.
+This project uses a **Hybrid Deployment** strategy:
+*   **Backend**: Deployed to **Google Cloud Run** using the `Dockerfile`.
+*   **Frontend**: Deployed to **Vercel** or **Netlify**.
 
-### 2. Frontend (React)
+> See the [DEPLOYMENT.md](./DEPLOYMENT.md) guide for full instructions.
 
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
-
-The application will be available at `http://localhost:5173` (or the port Vite assigns).
-
-## Features
-
-- **User Management**: Admin interface to add/edit/remove staff.
-- **Attendance**: Workers check-in/out with photos.
-- **Job Tracking**: Move jobs through manufacturing stages (CAD, Polish, Setting, etc.) with proof photos.
-- **Daily Feed**: A visual timeline of all shop floor activity.
-- **Task Duration**: Track time spent on specific tasks.
-
-## Troubleshooting
-
-- **Images not loading?** Ensure `STORAGE_BUCKET` is correct and the bucket has public read rules or proper tokens.
-- **Login failing?** Ensure the backend is running and connected to Firestore. The seeding script (`backend/wipe_and_seed_v2.py`) can be used to reset data if needed.
+## 📂 Project Structure
+*   `backend/`: FastAPI Application, Models, and API Routes.
+*   `frontend/`: React Components, Hooks, and Services.
+*   `frontend/utils/imageUtils.ts`: Client-side compression logic.
