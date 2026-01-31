@@ -75,7 +75,7 @@ class UserBase(BaseModel):
     username: Optional[str] = None
     name: str
     role: str
-    assignedStage: Optional[str] = None
+    departmentId: Optional[str] = None
 
 class UserCreate(UserBase):
     id: Optional[str] = None
@@ -91,8 +91,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class PinLoginRequest(BaseModel):
-    pin: str
+
 
 class JobLogBase(BaseModel):
     stageName: str
@@ -241,17 +240,7 @@ def login(creds: LoginRequest):
          
     return User(**user_data)
 
-@app.post("/api/auth/pin-login")
-def pin_login(creds: PinLoginRequest):
-    users_ref = db.collection('users')
-    query = users_ref.where('pin', '==', creds.pin).limit(1)
-    docs = query.get()
-    
-    if not docs:
-         raise HTTPException(status_code=400, detail="Invalid PIN")
-    
-    user_data = docs[0].to_dict()
-    return User(**user_data)
+
 
 
 # --- JOBS ---
@@ -443,9 +432,11 @@ def delete_department(dept_id: str):
     # Usage Check: Prevent deletion if any user is currently assigned to this Department
     # This maintains data integrity so no user is left with a "ghost" department.
     users_ref = db.collection('users')
-    query = users_ref.where('assignedStage', '==', dept_name).limit(1)
+    query = users_ref.where('departmentId', '==', dept_id).limit(1)
     if len(query.get()) > 0:
         raise HTTPException(status_code=400, detail=f"Cannot delete '{dept_name}': It is currently assigned to active staff.")
         
     dept_ref.delete()
     return {"status": "success", "message": f"Department {dept_id} deleted"}
+
+

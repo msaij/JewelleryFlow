@@ -16,7 +16,7 @@ export const UserManagement: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('Worker');
-  const [assignedStage, setAssignedStage] = useState<string>('');
+  const [departmentId, setDepartmentId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [selectedStage, setSelectedStage] = useState<string>('All');
@@ -49,9 +49,9 @@ export const UserManagement: React.FC = () => {
       const data = await getDepartments();
       const sorted = data.sort((a, b) => a.name.localeCompare(b.name));
       setDepartments(sorted);
-      // Set default assigned stage if empty and departments exist
-      if (!assignedStage && sorted.length > 0) {
-        setAssignedStage(sorted[0].name);
+      // Set default department if empty and departments exist
+      if (!departmentId && sorted.length > 0) {
+        setDepartmentId(sorted[0].id);
       }
     } catch (e) {
       console.error("Failed to load departments", e);
@@ -65,8 +65,14 @@ export const UserManagement: React.FC = () => {
       if (selectedStage !== 'All') {
         // If a stage is selected, valid only if user is a Worker in that stage
         // Admins are hidden when a specific stage is selected as they don't belong to stages
-        if (user.role === 'Worker' && user.assignedStage !== selectedStage) return false;
-        if (user.role !== 'Worker') return false;
+        if (user.role === 'Worker') {
+          // Find Department Name from ID to check against name-based selection
+          // Ideally we would select by ID, but selection uses Names for now.
+          const dept = departments.find(d => d.id === user.departmentId);
+          if (dept?.name !== selectedStage) return false;
+        } else {
+          return false;
+        }
       }
 
       // Worker Name Filter Application
@@ -81,7 +87,11 @@ export const UserManagement: React.FC = () => {
     let list = users;
     // If strict stage filter is on, only show workers belonging to that stage in the dropdown
     if (selectedStage !== 'All') {
-      list = list.filter(u => u.role === 'Worker' && u.assignedStage === selectedStage);
+      list = list.filter(u => {
+        if (u.role !== 'Worker') return false;
+        const dept = departments.find(d => d.id === u.departmentId);
+        return dept?.name === selectedStage;
+      });
     }
     return list;
   }, [users, selectedStage]);
@@ -97,7 +107,7 @@ export const UserManagement: React.FC = () => {
       username,
       password,
       role,
-      assignedStage: role === 'Worker' ? assignedStage : undefined
+      departmentId: role === 'Worker' ? departmentId : undefined
     };
 
     try {
@@ -120,7 +130,7 @@ export const UserManagement: React.FC = () => {
     setUsername(user.username);
     setPassword(''); // Don't populate existing password for security/technical reasons
     setRole(user.role);
-    setAssignedStage(user.assignedStage || (departments[0]?.name || ''));
+    setDepartmentId(user.departmentId || (departments[0]?.id || ''));
     setEditingId(user.id);
     setIsAdding(true);
     // Scroll to top to see the form
@@ -142,7 +152,7 @@ export const UserManagement: React.FC = () => {
     setUsername('');
     setPassword('');
     setRole('Worker');
-    setAssignedStage(departments[0]?.name || '');
+    setDepartmentId(departments[0]?.id || '');
     setEditingId(null);
     setIsAdding(false);
   };
@@ -166,6 +176,8 @@ export const UserManagement: React.FC = () => {
             <Settings size={18} />
             <span className="hidden sm:inline text-xs font-bold">Departments</span>
           </button>
+
+
 
           <div className="h-6 w-px bg-gray-300 mx-1"></div>
 
@@ -273,13 +285,15 @@ export const UserManagement: React.FC = () => {
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Assigned Department</label>
                 <select
-                  value={assignedStage}
-                  onChange={(e) => setAssignedStage(e.target.value)}
+                  value={departmentId}
+                  onChange={(e) => {
+                    setDepartmentId(e.target.value);
+                  }}
                   className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="" disabled>Select Department</option>
                   {departments.map(dept => (
-                    <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
                   ))}
                 </select>
               </div>
@@ -323,7 +337,7 @@ export const UserManagement: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.username}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
-                      {user.role} {user.assignedStage && `(${user.assignedStage})`}
+                      {user.role} {user.departmentId && departments.find(d => d.id === user.departmentId) && `(${departments.find(d => d.id === user.departmentId)?.name})`}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

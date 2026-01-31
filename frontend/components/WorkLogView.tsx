@@ -38,7 +38,10 @@ export const WorkLogView: React.FC = () => {
   const availableWorkers = useMemo(() => {
     const workerList = users.filter(u => u.role === 'Worker');
     if (selectedStage === 'All') return workerList;
-    return workerList.filter(u => u.assignedStage === selectedStage);
+    return workerList.filter(u => {
+      const dept = departments.find(d => d.id === u.departmentId);
+      return dept?.name === selectedStage;
+    });
   }, [users, selectedStage]);
 
   useEffect(() => {
@@ -75,7 +78,12 @@ export const WorkLogView: React.FC = () => {
       // Sort logs chronologically
       const wLogs = workerGroups[workerName].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const worker = getWorker(workerName);
-      const stage = worker?.assignedStage || 'Unknown';
+      const stage = (() => {
+        if (worker?.departmentId) {
+          return departments.find(d => d.id === worker.departmentId)?.name || 'Unknown';
+        }
+        return 'Unknown';
+      })();
 
       // Filters: Stage and Worker Name
       if (selectedStage !== 'All' && stage !== selectedStage) return;
@@ -229,7 +237,7 @@ export const WorkLogView: React.FC = () => {
 
     // 3. Sort groups by Worker Name (A-Z)
     return groups.sort((a, b) => a.workerName.localeCompare(b.workerName));
-  }, [filterDate, dailyLogs, users, selectedStage, selectedWorker]);
+  }, [filterDate, dailyLogs, users, departments, selectedStage, selectedWorker]);
 
   if (loading) return <div className="p-10 text-center text-gray-500">Loading work logs...</div>;
 

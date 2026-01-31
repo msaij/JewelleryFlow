@@ -8,7 +8,7 @@ export interface User {
   password: string; // In a real app, this should be hashed.
   name: string;
   role: Role;
-  assignedStage?: string; // Required if role is Worker
+  departmentId?: string; // New ID-based Link
 }
 
 export interface Job {

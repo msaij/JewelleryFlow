@@ -81,12 +81,14 @@ export const DailyPhotoFeed: React.FC = () => {
 
     // Distribute workers into their respective stage buckets
     allUsers.forEach(user => {
-      if (user.role === 'Worker' && user.assignedStage) {
-        // Robustness: Handle users assigned to deleted/unknown departments
-        if (!workersByStage[user.assignedStage]) {
-          workersByStage[user.assignedStage] = [];
-        }
-        workersByStage[user.assignedStage].push(user);
+      // Filter for workers
+      if (user.role !== 'Worker') return;
+
+      const dept = allDepartments.find(d => d.id === user.departmentId);
+      if (dept) {
+        // Handle users assigned to deleted/unknown departments robustly
+        if (!workersByStage[dept.name]) workersByStage[dept.name] = [];
+        workersByStage[dept.name].push(user);
       }
     });
 
@@ -190,7 +192,10 @@ export const DailyPhotoFeed: React.FC = () => {
   const availableWorkers = useMemo(() => {
     const workers = allUsers.filter(u => u.role === 'Worker');
     if (selectedStage === 'All') return workers;
-    return workers.filter(u => u.assignedStage === selectedStage);
+    return workers.filter(u => {
+      const dept = allDepartments.find(d => d.id === u.departmentId);
+      return dept?.name === selectedStage;
+    });
   }, [allUsers, selectedStage]);
 
   if (loading) return <div className="text-center py-20 text-gray-400">Loading feed...</div>;

@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format, isSameDay, differenceInMinutes, isToday } from 'date-fns';
-import { getDailyLogs, getJobs, getUsers } from '../services/dataService';
-import { STAGES, DailyLog, User } from '../types';
+import { getDailyLogs, getJobs, getUsers, getDepartments } from '../services/dataService';
+import { DailyLog, User, Department } from '../types';
 import { Calendar, Clock, AlertCircle, CheckCircle2, Timer, Moon } from 'lucide-react';
 import { StageBadge } from './StageBadge';
 
@@ -14,10 +14,18 @@ export const ActivityLogView: React.FC = () => {
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
+  const [departments, setDepartments] = useState<Department[]>([]);
+
   useEffect(() => {
     const fetchData = async () => {
-      setDailyLogs(await getDailyLogs());
-      setAllUsers(await getUsers());
+      const [logs, users, depts] = await Promise.all([
+        getDailyLogs(),
+        getUsers(),
+        getDepartments()
+      ]);
+      setDailyLogs(logs);
+      setAllUsers(users);
+      setDepartments(depts);
     };
     fetchData();
   }, []);
@@ -47,28 +55,18 @@ export const ActivityLogView: React.FC = () => {
     const selectedDate = new Date(y, m - 1, d);
     const isCurrentDay = isSameDay(selectedDate, new Date());
 
-    // Group workers by stage
-    const workersByStage: Record<string, typeof allUsers> = {};
-
-    // Initialize stages
-    STAGES.forEach(stage => {
-      if (stage !== 'Completed') {
-        workersByStage[stage] = [];
-      }
-    });
-
-    // Distribute workers
-    allUsers.forEach(user => {
-      if (user.role === 'Worker' && user.assignedStage) {
-        if (!workersByStage[user.assignedStage]) {
-          workersByStage[user.assignedStage] = [];
-        }
-        workersByStage[user.assignedStage].push(user);
-      }
-    });
+    // Sort Departments Alphabetically
+    const sortedDepts = [...departments].sort((a, b) => a.name.localeCompare(b.name));
 
     // Build the rich data structure
-    return Object.entries(workersByStage).map(([stage, workers]) => {
+    return sortedDepts.map(dept => {
+      // Find workers for this department (Hybrid Logic)
+      const workers = allUsers.filter(user => {
+        if (user.role !== 'Worker') return false;
+
+        return user.departmentId === dept.id;
+      });
+
       // Map each worker to their daily stats
       const workerStats = workers.map(worker => {
         // Find Attendance Logs
@@ -114,11 +112,11 @@ export const ActivityLogView: React.FC = () => {
       });
 
       return {
-        stage,
+        stage: dept.name,
         workers: workerStats
       };
     });
-  }, [date, dailyLogs, allUsers]);
+  }, [date, dailyLogs, allUsers, departments]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-20">

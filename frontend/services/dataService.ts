@@ -30,23 +30,7 @@ export const authenticateUser = async (username: string, pass: string): Promise<
   }
 };
 
-export const authenticatePin = async (pin: string): Promise<User | null> => {
-  try {
-    const res = await fetch(`${API_BASE}/auth/pin-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin })
-    });
 
-    if (!res.ok) {
-      return null;
-    }
-    return await res.json();
-  } catch (e) {
-    console.error(e);
-    return null;
-  }
-};
 
 export const getSession = (): User | null => {
   try {
@@ -241,3 +225,4 @@ export const deleteDepartment = async (id: string) => {
     method: 'DELETE'
   });
 };
+
