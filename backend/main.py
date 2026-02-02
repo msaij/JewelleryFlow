@@ -14,6 +14,11 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, storage, firestore
 
+# Auth Imports
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+
+
 # Load environment variables
 load_dotenv()
 
@@ -69,6 +74,32 @@ else:
     db = firestore.client()
 
 # -------------------------------------------------------------------
+# Auth Configuration
+# -------------------------------------------------------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "insecure-change-me-production-key-123")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 1 week
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password, hashed_password):
+    # LAZY MIGRATION: Check if it's a legacy plaintext password
+    # Bcrypt hashes start with $2
+    if not hashed_password.startswith("$2"):
+        return plain_password == hashed_password
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# -------------------------------------------------------------------
 # Pydantic Models (API Schemas)
 # -------------------------------------------------------------------
 class UserBase(BaseModel):
@@ -80,12 +111,17 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     id: Optional[str] = None
     password: Optional[str] = None
-    pin: Optional[str] = None
+
 
 class User(UserBase):
     id: str
     class Config:
         from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: User
 
 class LoginRequest(BaseModel):
     username: str
@@ -190,6 +226,10 @@ def create_user(user: UserCreate):
     user_data = user.dict()
     user_data['id'] = new_id
     
+    # HASH PASSWORD
+    if user.password:
+        user_data['password'] = get_password_hash(user.password)
+    
     # Store in Firestore
     new_ref.set(user_data)
     
@@ -223,7 +263,7 @@ def delete_user(user_id: str):
     user_ref.delete()
     return {"status": "success", "message": f"User {user_id} deleted"}
 
-@app.post("/api/auth/login")
+@app.post("/api/auth/login", response_model=Token)
 def login(creds: LoginRequest):
     # Try finding by username
     users_ref = db.collection('users')
@@ -234,11 +274,26 @@ def login(creds: LoginRequest):
          raise HTTPException(status_code=400, detail="User not found")
     
     user_data = docs[0].to_dict()
-    # In a real app, hash password check. using plain text for demo compatibility
-    if user_data.get('password') != creds.password and user_data.get('pin') != creds.password: # Allow pin as password for legacy
+    stored_password = user_data.get('password')
+    
+    if not verify_password(creds.password, stored_password):
          raise HTTPException(status_code=400, detail="Incorrect password")
+
+    # LAZY MIGRATION: If we just matched a plaintext password, Upgrade it now!
+    if not stored_password.startswith("$2"):
+        print(f"Migrating password for user {user_data.get('username')}")
+        new_hash = get_password_hash(creds.password)
+        db.collection('users').document(user_data['id']).update({"password": new_hash})
+        user_data['password'] = new_hash # Update local for return
          
-    return User(**user_data)
+    # Generate Token
+    access_token = create_access_token(data={"sub": user_data['username'], "id": user_data['id']})
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=User(**user_data)
+    )
 
 
 

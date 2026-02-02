@@ -8,7 +8,13 @@ A powerful full-stack application for managing jewellery manufacturing workflows
 *   **Frontend**: React (Vite) + Tailwind CSS + Vercel
 *   **Database**: Firebase Firestore (NoSQL)
 *   **Storage**: Firebase Storage (Automatic WebP Compression)
+*   **Authentication**: JWT (JSON Web Tokens) + Bcrypt Password Hashing
 *   **Security**: Environment Variable credential management
+
+## 🔐 Authentication & Security
+*   **Secure Hashing**: Passwords are hashed with **Bcrypt** before storage.
+*   **Zero-Downtime Migration**: "Lazy Migration" system automatically upgrades legacy plaintext passwords to hashes upon next login.
+*   **Stateless**: Uses short-lived JWTs for API access, ensuring stateless and scalable session management.
 
 ## ✨ Key Features
 

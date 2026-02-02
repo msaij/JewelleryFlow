@@ -5,7 +5,19 @@ import { compressImage } from '../utils/imageUtils';
 
 // --- API CONFIG ---
 // For Hybrid deployment (Netlify FE + Vercel BE), we need absolute URL
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
+const getHeaders = (isUpload = false) => {
+  const headers: Record<string, string> = {};
+  if (!isUpload) headers['Content-Type'] = 'application/json';
+
+  const token = localStorage.getItem(APP_KEYS.TOKEN);
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
 
 
 
@@ -23,7 +35,12 @@ export const authenticateUser = async (username: string, pass: string): Promise<
       return null;
     }
 
-    return await res.json();
+    const data = await res.json();
+    // Save Token
+    if (data.access_token) {
+      localStorage.setItem(APP_KEYS.TOKEN, data.access_token);
+    }
+    return data.user;
   } catch (e) {
     console.error(e);
     return null;
@@ -47,12 +64,13 @@ export const setSession = (user: User) => {
 
 export const clearSession = () => {
   localStorage.removeItem(APP_KEYS.SESSION);
+  localStorage.removeItem(APP_KEYS.TOKEN);
 };
 
 // --- DATA ACCESS ---
 
 export const getJobs = async (): Promise<Job[]> => {
-  const res = await fetch(`${API_BASE}/jobs`);
+  const res = await fetch(`${API_BASE}/jobs`, { headers: getHeaders() });
   if (!res.ok) throw new Error("Failed to fetch jobs");
   const jobs = await res.json();
   // Ensure history is array
@@ -60,19 +78,19 @@ export const getJobs = async (): Promise<Job[]> => {
 };
 
 export const getUsers = async (): Promise<User[]> => {
-  const res = await fetch(`${API_BASE}/users`);
+  const res = await fetch(`${API_BASE}/users`, { headers: getHeaders() });
   if (!res.ok) throw new Error("Failed to fetch users");
   return res.json();
 };
 
 export const getDepartments = async (): Promise<Department[]> => {
-  const res = await fetch(`${API_BASE}/departments`);
+  const res = await fetch(`${API_BASE}/departments`, { headers: getHeaders() });
   if (!res.ok) throw new Error("Failed to fetch departments");
   return res.json();
 };
 
 export const getDailyLogs = async (): Promise<DailyLog[]> => {
-  const res = await fetch(`${API_BASE}/daily-logs`);
+  const res = await fetch(`${API_BASE}/daily-logs`, { headers: getHeaders() });
   if (!res.ok) return []; // Fallback
   return res.json();
 };
@@ -103,7 +121,7 @@ export const createJob = async (image: string, priority: Priority): Promise<Job>
 
   const res = await fetch(`${API_BASE}/jobs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(newJob)
   });
   return res.json();
@@ -136,7 +154,7 @@ export const advanceJob = async (jobId: string, proofPhoto: string, worker: User
 
   await fetch(`${API_BASE}/jobs/${jobId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(updatedJob)
   });
 };
@@ -152,7 +170,7 @@ export const addDailyLog = async (worker: User, type: 'Start' | 'End' | 'StartWo
 
   await fetch(`${API_BASE}/daily-logs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(newLog)
   });
 };
@@ -160,7 +178,7 @@ export const addDailyLog = async (worker: User, type: 'Start' | 'End' | 'StartWo
 export const addUser = async (user: User) => {
   await fetch(`${API_BASE}/users`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(user)
   });
 };
@@ -170,14 +188,15 @@ export const updateUser = async (updatedUser: User) => {
 
   await fetch(`${API_BASE}/users/${updatedUser.id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(updatedUser)
   });
 };
 
 export const removeUser = async (id: string) => {
   await fetch(`${API_BASE}/users/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   });
 };
 
@@ -201,6 +220,7 @@ export const uploadFile = async (file: File): Promise<string> => {
 
   const res = await fetch(`${API_BASE}/upload`, {
     method: 'POST',
+    headers: getHeaders(true),
     body: formData
   });
 
@@ -213,7 +233,7 @@ export const uploadFile = async (file: File): Promise<string> => {
 export const createDepartment = async (name: string): Promise<Department> => {
   const res = await fetch(`${API_BASE}/departments`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ name })
   });
   if (!res.ok) throw new Error("Failed to create department");
@@ -222,7 +242,8 @@ export const createDepartment = async (name: string): Promise<Department> => {
 
 export const deleteDepartment = async (id: string) => {
   await fetch(`${API_BASE}/departments/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   });
 };
 

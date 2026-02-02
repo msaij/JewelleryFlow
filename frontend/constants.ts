@@ -7,5 +7,6 @@ export const APP_KEYS = {
   USERS: 'jewel_flow_users',
   LOGS: 'jewel_flow_logs',
   DAILY: 'jewel_flow_daily',
-  SESSION: 'jewel_flow_session'
+  SESSION: 'jewel_flow_session',
+  TOKEN: 'jewel_flow_token'
 };
